@@ -24,7 +24,7 @@ The datasets used for this analysis are stored in the `datasets/` folder. This d
 ## 📝 Analysis and Reports
 
 ### 1. **Decision Trees (Classification)**
-- **R Markdown File**: [Decision_Tree_Erin_Kennedy.rmd](decision-tree/Decision_Tree_Erin_Kennedy.rmd)
+- **R Markdown File**: [Decision_Tree_Erin_Kennedy.rmd](decision-tree/Decision_Tree_Erin_Kennedy.Rmd)
 - **HTML Report**: [Decision_Tree_Erin_Kennedy.html](decision-tree/Decision_Tree_Erin_Kennedy.html)
 - **Description**: This analysis uses Decision Trees for classification purposes. The R Markdown file includes detailed explanations, and the HTML report presents the results.
 
