@@ -19,23 +19,23 @@ The datasets used for this analysis are stored in the `datasets/` folder. This d
 - **decision-tree/**: Includes the R script for building and evaluating the Decision Tree classification model.
 - **knn/**: Contains the R script for implementing k-Nearest Neighbors (kNN) classification.
 - **regression/**: Contains the R script for building and evaluating the Multiple Linear Regression model.
-- **report/**: Contains the R Markdown file (`.Rmd`) used to generate the analysis report, along with the rendered HTML version.
+- **analysis_report/**: Contains the R Markdown file (`.Rmd`) used to generate the analysis report, along with the rendered HTML version.
 
 ## 📝 Analysis and Reports
 
 ### 1. **Decision Trees (Classification)**
-- **R Markdown File**: [Decision_Tree_Erin_Kennedy.Rmd](Decision_Tree_Erin_Kennedy.Rmd)
-- **HTML Report**: [Decision_Tree_Erin_Kennedy.html](Decision_Tree_Erin_Kennedy.html)
+- **R Markdown File**: [Decision_Tree_Erin_Kennedy.Rmd](analysis_report/Decision_Tree_Erin_Kennedy.Rmd)
+- **HTML Report**: [Decision_Tree_Erin_Kennedy.html](analysis_report/Decision_Tree_Erin_Kennedy.html)
 - **Description**: This analysis uses Decision Trees for classification purposes. The R Markdown file includes detailed explanations, and the HTML report presents the results.
 
 ### 2. **k-Nearest Neighbors (kNN) (Classification)**
-- **R Markdown File**: [KNN_Erin_Kennedy.Rmd](KNN_Erin_Kennedy.Rmd)
-- **HTML Report**: [KNN_Erin_Kennedy.html](KNN_Erin_Kennedy.html)
+- **R Markdown File**: [KNN_Erin_Kennedy.Rmd](analysis_report/KNN_Erin_Kennedy.Rmd)
+- **HTML Report**: [KNN_Erin_Kennedy.html](analysis_report/KNN_Erin_Kennedy.html)
 - **Description**: This analysis employs k-Nearest Neighbors for classification. The R Markdown file includes the methodology, and the HTML report shows the results and evaluation.
 
 ### 3. **Multiple Linear Regression (Regression)**
-- **R Markdown File**: [Regression_Erin_Kennedy.Rmd](Regression_Erin_Kennedy.Rmd)
-- **HTML Report**: [Regression_Erin_Kennedy.html](Regression_Erin_Kennedy.html)
+- **R Markdown File**: [Regression_Erin_Kennedy.Rmd](analysis_report/Regression_Erin_Kennedy.Rmd)
+- **HTML Report**: [Regression_Erin_Kennedy.html](analysis_report/Regression_Erin_Kennedy.html)
 - **Description**: This analysis performs Multiple Linear Regression to predict a target variable. The R Markdown file provides detailed insights, and the HTML report presents the final results and performance evaluation.
 
 ## 📑 Report
