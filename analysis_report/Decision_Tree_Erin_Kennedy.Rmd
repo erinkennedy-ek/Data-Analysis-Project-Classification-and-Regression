@@ -1,0 +1,293 @@
+---
+title: "Decision_Tree2_Erin_Kennedy"
+author: "A00275664"
+date: "2024-04-04"
+output: html_document
+bibliography: Decision_Tree_References.json
+---
+#  Decision Trees for Obesity Rate Prediction
+
+## Introduction
+
+### Preparation
+```{r eval=FALSE, include=FALSE, message=FALSE, warning=FALSE}
+install.packages("tidyverse")
+install.packages("caret")
+install.packages("rpart")
+install.packages("gmodels")
+```
+
+```{r eval =TRUE, warning=FALSE, message=FALSE}
+#Install Relevant Packages
+library(tidyverse)
+library(caret)
+library(rpart)
+library(dplyr)
+library(gmodels)
+
+```
+
+Import the **obesity** dataset and install relevant packages using the **read.csv()** command
+```{r}
+#Import the obesity dataset and examine the structure
+obesity<-read.csv("~/A00275664/Data/ObesityDataSet_raw_and_data_sinthetic.csv", header = T, sep = ",", 
+                  stringsAsFactors = FALSE)
+str(obesity)
+```
+
+
+```{r results='hide'}
+#Rename unclear column headings for better understanding
+obesity <- obesity %>% 
+  rename("obesity_level" = "NObeyesdad",
+         "high_cal_foods" = "FAVC",
+         "veg_meals" = "FCVC",
+         "eat_between_meals" = "CAEC",
+         "main_meals_count" = "NCP",
+         "family_history" = "family_history_with_overweight")
+
+
+obesity <- obesity %>%
+  mutate(obesity_level = recode(obesity_level,
+                                "Normal_Weight" = "NW",
+                                "Overweight_Level_I" = "OWI",
+                                "Overweight_Level_II" = "OWII",
+                                "Obesity_Type_I" = "OTI",
+                                "Insufficient_Weight" = "IW",
+                                "Obesity_Type_II" = "OTII",
+                                "Obesity_Type_III" = "OTIII"))
+
+
+
+```
+
+### Important Tables
+Important variables, such as *Gender* aree viewed in table form to understand their distribution clearly.
+*Obesity_level* is the classifying variable. There is a slight class imbalance between the levels. A class imbalance can result in problems such as a negative effect on the accuracy and performance of the model. There are more entries of **Obesity_Type_I** than other data values, which can 'bias' the model or enable better prediction for **Obesity_Type_I** data rather than the rest of the data values.
+```{r results='hide'}
+# Familiarise with columns that may be important
+unique(obesity$MTRANS)
+unique(obesity$eat_between_meals)
+unique(obesity$CALC)
+#View tables that may be important
+table(obesity$obesity_level)
+table (obesity$Gender)
+table(obesity$high_cal_foods)
+table(obesity$eat_between_meals)
+```
+Null values and other obscure data values, such as **?** are scrutinised for in the dataset. These values can interfer with the model and alter predictions with their presence. However, there are none of these values present in this dataset.
+```{r results ='hide'}
+# Check for missing values in obesity dataset
+missing_values <- colSums(is.na(obesity))
+print(missing_values)
+```
+
+Change CALC to a factor to allow easier prediction further along
+```{r results='hide'}
+# Change CALC structure to a factor to avoid future errors
+obesity$CALC <- factor(obesity$CALC, levels = c("no", "Sometimes", "Frequently", "Always"))
+```
+```{r results='hide'}
+# Check the structure of the dataframe after processing
+str(obesity)
+```
+
+# Model Creation
+### Creating Random Training and Test Datasets
+Here, the **caret** package is utilised. The *obesity_level* variable is
+partitioned to create a training sample dataset, containing 80% of the
+**obesity** data. The remaining 20% will be used to test the model and evaluate its accuracy rate.
+```{r}
+# Split the data into training and testing sets
+set.seed(123)
+training.samples <- obesity$obesity_level %>% createDataPartition(p = 0.8, list = FALSE)
+obesity_train <- obesity[training.samples, ]
+obesity_test <- obesity[-training.samples, ]
+```
+
+It can be calculated from the tables that the training and test sets both
+have an average distribution of values resting at **14.28%**, however, both remain skewed in favour of **Obesity_Level_I** which may still allow for inaccuracy with regards to bias due to the fact that the model has less data to learn and train from regarding the other data values.
+```{r}
+#Creating Random training and test datasets
+set.seed(123)
+training.samples <- obesity$obesity_level %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+
+obesity_train <- obesity[training.samples, ]
+obesity_test <- obesity[-training.samples, ]
+# Both sets have an approximately equal distribution in correspondance with eachother
+prop.table(table(obesity_train$obesity_level)) 
+prop.table(table(obesity_test$obesity_level)) 
+```
+
+### Model Plotting
+Here, the decision tree model **obesity_model** is created. The initial plot points and lines are constructed and labeled with the relevant variables and attributes.
+```{r}
+set.seed(345)
+obesity_model <- rpart(obesity_level ~., data = obesity_train, method = "class")
+```
+
+```{r fig.align='center', fig.width=10, fig.height=7}
+# Plot the trees
+par(xpd = NA) # Avoid clipping the text in some device
+plot(obesity_model)
+text(obesity_model, digits = 5)
+```
+
+# Predictions
+
+### Test Data Predictions
+Now the model is trained, predictions are made using *dplyr*. Predictions are made based upon the decision tree  *obesity_model* and stored in *predicted.classes*. Next the accuracy rate will be calculated. 
+
+```{r}
+# Make predictions on the test data
+predicted.classes <- obesity_model %>%
+  predict(obesity_test, type = "class")
+head(predicted.classes)
+```
+
+
+The model accuracy is high with 84%. This indicates the model is performing well predicting the obesity level of a subject. This can be interpreted further with a confusion matrix, which can be seen later. 
+First the decision tree will need to be pruned to prevent overfitting.
+
+```{r}
+#Model accuracy with test data
+mean(predicted.classes == obesity_test$obesity_level) #[1] 0.8404762
+```
+
+# Pruning
+### The Complexity Parameter
+From the complexity parameter (CP) information below, it can be seen from the *xerror* rate that the error rate does not increase after each split. It decreases significantly. Pruning in this circumstance would not have any benefits on the accuracy rate. This may be due to overfitting.
+```{r}
+# Pruning
+printcp(obesity_model)
+```
+However if the **obesity_model** did need to be pruned, the lowest *xerror* rate would need to be identified and its corresponding *cp* rate. For example the code below shows how this would be performed.
+
+However in this particular circumstance there would be no change to the accuracy rate as the *xerror* rate is also the last cp value. Although pruning by the 11th node can help create a simpler, more understandable decision tree, despite a less accurate tree.
+```{r fig.align='center', fig.width=10, fig.height=7}
+obesity_model2 <- prune(obesity_model, cp= 0.011348)
+# Plot the tree
+par(xpd = NA) 
+plot(obesity_model2)
+text(obesity_model2, digits = .5)
+```
+
+### Pruned Model Predictions
+A new accuracy rate is calculated with the pruned model **obesity_model2**. Pruning can help to increase the accuracy rate of models by removing various leaf nodes which do not add to the accuracy of the model. Calculating a new accuracy rate after pruning can create a clearer, simpler and generally a more accurate decision tree model. Pruning by the 11th node can help create a simpler, more understandable decision tree, despite a less accurate tree.
+
+```{r}
+#Make predictions on the test data with pruned model
+predicted.classes <- obesity_model2 %>% 
+  predict(obesity_test, type = "class")
+# Compute model accuracy rate on test data
+mean(predicted.classes == obesity_test$obesity_level) # [1] 0.8309524 Reduction of 1% in accuracy
+```
+
+From the summary results, It can be interpreted that *Weight*, *Height*, *Gender* and *veg_meals* had very high importance amongst the variables provided. 
+Node number 5 experienced the highest error rate (expected loss) of 0.7024902. The tree developed two splits which did not need to be pruned and yielded a high accuracy rate despite this.
+```{r results='hide'}
+summary(obesity_model2)
+```
+
+## 'Caret' Pruning
+
+The **caret** package contains functions that choose the most appropriate complexity parameter (cp) to prune the decision tree with the aim of increasing prediction accuracy rate and creating a simpler tree. 
+Here *obesity_model3* is created to evaluate which cp is ideal for a simplified, clearer decision tree.
+
+```{r}
+# new model fit onto the training set
+set.seed(345)
+obesity_model3 <- train(
+  obesity_level ~., data = obesity_train, method = "rpart",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 12) # number of cp values to evaluate
+```
+
+The new model's accuracy rate is then plotted with different cp values to be evaluated with.
+```{r fig.align='center'}
+#Plot obesity_model3 accuracy with different cp values
+plot(obesity_model3)
+```
+It can be seen from the plot that the data value(cp) with the highest accuracy rate appears to fall along the .8 to .9% accuracy rate and between .01 and .02 cp value. This cp can be specified with bestTune in **caret**.
+
+```{r}
+# Use bestTune to find the most best cp for model accuracy
+obesity_model3$bestTune # cp 0.01099291
+```
+The most accurate complexity parameter is found to be .011. 
+```{r fig.align='center', fig.width=10, fig.height=7}
+# Plot the final tree model
+par(xpd = NA) 
+plot(obesity_model3$finalModel)
+text(obesity_model3$finalModel, digits = 3)
+```
+
+
+```{r}
+# Decision rules in the model
+obesity_model3$finalModel
+```
+From the information above, multiple leaf nodes can be seen. Weight, gender and height appear to be the primary general decision-makers of the tree.
+
+```{r}
+# Make predictions on the test data
+obesity_predictions <- obesity_model3 %>% predict(obesity_test)
+# Compute model accuracy rate on test data
+mean(obesity_predictions == obesity_test$obesity_level)
+## [1] 0.8238095 reduced accuracy rate
+```
+The caret-based model reached an 82.4% accuracy rate, compared to an 83.1% accuracy rate in model 2 and 84.1% in the unpruned first model.
+
+# Model Performance Evaluation
+
+### Confusion Matrix
+Out of 420 records of obesity data, the model has an accuracy rate of 83.1%. 71 records, or 16.9% were incorrectly predicted from the **obesity_test** data which would not be good for a patient 
+Its important to note that the model only incorrectly identified False Positives (identified **Normal_Weight** as any Obese_Level), and only in one circumstance identified a False Negative (identified **Overweight_Level_I** as **Normal_Weight**). This is arguably a better outcome than a model than predicts majority incorrect False Negatives.
+```{r}
+# Evaluating Model Performance
+obesity_predict <- predict(obesity_model2, obesity_test, type = "class")
+CrossTable(obesity_test$obesity_level, obesity_predict, 
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('Actual Obesity Level', 'Predicted Obesity Level'))
+```
+
+### New Data Predictions
+Inserting a new piece of data into the model returns **Obesity_Level** as a result, which is accurate according to the model. According to the model, a 25 year old female, who uses public transport but eats a large amount of meals with low vegetable amounts is classified as *Overweight_Level_II*.
+
+```{r eval = TRUE}
+# Predict a New Piece of Data
+# Predict a New Piece of Data
+predictnewdata <- data.frame(Gender = "Female", Age = 25, 
+                             Height = 1.62, Weight = 65.0, family_history = "yes", 
+                             high_cal_foods = "no", veg_meals = 2, main_meals_count = 3, 
+                             eat_between_meals = "Sometimes",SMOKE = "no", CH2O = 2, SCC = "no", FAF = 1, 
+                             TUE = 0, CALC = "no", MTRANS = "Public_Transportation")
+obesity_model2 %>% 
+  predict(predictnewdata, "class") 
+```
+
+## Conclusion & Reflection
+
+This project involved constructing a decision tree model to predict obesity levels. While the goal was straightforward, the journey revealed some interesting challenges and considerations.
+
+Initially, the data structure itself posed a hurdle. Splitting the data for training and testing required converting variables into "factors," a step that initially caused errors. Further investigation revealed an unnecessary command in the import code itself was modifying the data structure, leading to unexpected behavior. Thankfully, this was identified and rectified. As the classification came to an end, the model(*obesity_model3*) chosen to continue with and further evaluate, unfortunately, concurrently brought up errors when attempts were made to form a crosstable with its predictions. This persevered and the decision was made to evaluate *obesity_model2*. This problem is likely due to the third model's structure. *Obesity_model3* contained a different model structure compared to model 1 and model 2.
+
+As the model took shape, potential issues like class imbalance and overfitting were kept in mind. Pruning the decision tree, a technique to prevent overfitting, did not significantly improve accuracy. This suggested the original model was already generalising well and didn't require drastic simplification.
+
+Selecting the optimal model involved both manual exploration and leveraging the "caret" package. While multiple approaches yielded models with similar accuracy, Occam's Razor guided the selection of obesity_model3. This principle favours simpler models, and *obesity_model3* struck a good balance between complexity and performance.
+
+The analysis revealed valuable insights. Factors like weight, height, gender, and vegetable intake emerged as crucial predictors of obesity. However, it's important to acknowledge the model's limitations, particularly its potential for false positives (incorrectly classifying someone as obese) and false negatives (missing individuals who actually are obese).
+
+Overall, this project highlighted the importance of careful data preparation and model evaluation. While the final model offers valuable insights, its limitations demand cautious interpretation when making predictions.
+
+
+## References
+
+@LearnDecision
+@molnar24
+@RMarkdown_Cheat_Sheet
+@lantz13
+@CrossValidation22
+@Creating15
+

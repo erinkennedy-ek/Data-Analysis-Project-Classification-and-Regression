@@ -1,0 +1,361 @@
+---
+title: "KNN_Erin_Kennedy"
+author: "A00275664"
+date: "2024-03-26"
+output: html_document
+bibliography: KNN_References.json
+---
+
+# Employing K-Nearest Neighbour for Obesity Prediction
+
+# Introduction
+## Preparation
+
+Import the ObesityDataSet_raw_and_data_sinthetic dataset and install relevant packages using the **read.csv()** command
+
+
+
+```{r echo = TRUE, include=TRUE}
+obesity<-read.csv("~/A00275664/Data/ObesityDataSet_raw_and_data_sinthetic.csv",
+                  header = T, sep = ",",
+                  stringsAsFactors = FALSE)
+```
+
+```{r include=TRUE, echo=TRUE, warning=FALSE, message=FALSE}
+#Install relevant packages 
+library(tidyverse)
+library(caret)
+library(rpart)
+library(dplyr)
+library(gmodels)
+library(class)
+library(ggplot2)
+```
+
+## Analysis
+### Initial Analysis
+```{r include=TRUE, echo=TRUE}
+#Rename columns for clarity
+obesity <- obesity %>% 
+  rename("obesity_level" = "NObeyesdad",
+         "high_cal_foods?" = "FAVC",
+         "veg_meals" = "FCVC",
+         "eat_between_meals" = "CAEC",
+         "main_meals_count" = "NCP",
+         "family_history" = "family_history_with_overweight")
+unique(obesity$obesity_level) # the classifying variable
+```
+
+```{r include=TRUE, echo=FALSE}
+#View structure of dataset
+str(obesity)
+```
+
+```{r include=FALSE, echo=FALSE}
+View(obesity)
+```
+
+### Numeric Encoding of Categorical Variables
+
+All categorical variables, except for the classifying variable, have been converted to numeric.
+
+```{r include=TRUE, echo=TRUE}
+# Change 'Gender' to numeric
+obesity$Gender <- as.numeric(factor(obesity$Gender, 
+                                    levels = c("Female", "Male")))
+# Change 'CALC' to numeric
+obesity$CALC <- as.numeric(factor(obesity$CALC, 
+                                  levels = c("no", "Sometimes", "Frequently",
+                                             "Always")))
+# Change 'family_history' to numeric
+obesity$family_history <- as.numeric(factor(obesity$family_history, 
+                                            levels = c("no", "yes")))
+# Change 'high_cal_foods' to numeric
+obesity$high_cal_foods <- as.numeric(factor(obesity$high_cal_foods, 
+                                            levels = c("no", "yes")))
+# Change 'eat_between_meals' to numeric
+obesity$eat_between_meals <- as.numeric(factor(obesity$eat_between_meals, 
+                                               levels = c("no", "Sometimes",
+                                                          "Frequently",
+                                                          "Always")))
+# Change 'MTRANS' to numeric
+obesity$MTRANS <- as.numeric(factor(obesity$MTRANS, 
+                                    levels = c("Public_Transportation",
+                                               "Walking", "Automobile",
+                                               "Motorbike", "Bike")))
+# Change 'SCC' to numeric
+obesity$SCC <- as.numeric(factor(obesity$SCC, 
+                                 levels = c("no", "yes")))
+# Change 'SMOKE' to numeric
+obesity$SMOKE <- as.numeric(factor(obesity$SMOKE, 
+                                   levels = c("no", "yes")))
+
+
+```
+```{r eval=FALSE, include=TRUE}
+# Check conversion was successful
+str(obesity)
+```
+
+
+## Managing Null Values
+### Identifying Missing Data
+
+This dataset contains no missing values or symbols representing missing values
+
+```{r}
+null_values <- colSums(is.na(obesity)) # calculates count of null values in each column
+print(null_values) # print amount of null values in each dataset
+```
+
+# K-NN Preparation
+
+In this project, K-Nearest Neighbors (K-NN) will be utilised as the chosen algorithm for predictive analysis. K-NN is particularly suited for this task as it relies on categorical variables for prediction. The main objective of this analysis is to predict the obesity level based on the provided dataset. K-NN operates by identifying the most similar instances in the feature space and assigning the class label based on the majority vote among its nearest neighbors. With **obesity_level** as the target variable, K-NN will leverage the categorical features available in the dataset to make accurate predictions. This approach allows for a straightforward yet effective method for classification, making it suitable for this particular predictive modeling task.
+
+```{r, echo=TRUE, eval=FALSE}
+table(obesity$obesity_level) # Frequency of the 7 obesity levels 
+summary(obesity[c("obesity_level", "Gender", "family_history")]) # example descriptive statistics
+```
+First, normalisation is applied. Normalisation is essential in a machine learning algorithm, such as K-NN due to the reason that K-NN is dependent primarily on the distance between data points, to make predictions. Normalisation helps create a range applicable for all variables ensuring that each feature has a suitable proportional impact to the model's distance calculations. This in turn reduces bias and can increase the accuracy rate of the model.
+
+```{r eval=TRUE, echo=TRUE}
+# Percentage of each data value in classifying variable
+round(prop.table(table(obesity$obesity_level)) * 100, digits = 1)
+# Columns before normalisation
+summary(obesity[c("Height", "CH2O", "FAF")])
+```
+
+Each have a different ranges which can affect the impact on the model's distance calculations
+
+## Normalisation
+
+```{r echo = TRUE, include=TRUE}
+# Function to normalise data
+normalise <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+# Specify the columns to normalise
+columns_normalise <- c("Age", "Weight", "main_meals_count", "Height", "veg_meals", "CH2O", "FAF", "TUE")
+
+# Apply the normalise function to the specified columns using lapply
+obesity_normalise <- as.data.frame(lapply(obesity[columns_normalise], normalise)) #Normalised dataframe
+# Check if data has been normalised, min should = 0 and max should = 1
+summary(obesity_normalise$Height)
+```
+
+This code divides **obesity_normalise** into two parts: one for training a machine learning model and another for testing its performance. It starts by setting a seed to ensure consistent randomness. Then, it shuffles the rows of the dataset to mix up the data. This is neccessary due to the reason that the **obesity_level** column is quite ordered, sometimes seeing hundreds of the same level at once. 
+
+Afterwards, the shuffled rows are split accordingly into training and testing sets. The labels associated with these rows are then extracted from the original dataset ("obesity") and paired with the corresponding training and testing data. This ensures that the labels are correctly assigned to both sets of data for training and evaluation purposes.
+```{r}
+# Split data randomly into training (80%) and testing (20%) sets
+set.seed(123)
+# returns number of rows in obesity
+total_samples <- nrow(obesity_normalise) 
+# selects a random sample
+shuffled_rows <- sample(total_samples) 
+# 80% for training, 20% for testing
+train_prop <- 0.8  
+# retrieves approximately 80% of total samples
+n_train <- round(train_prop * total_samples) 
+# training set is set from 1-n_train
+train_rows <- shuffled_rows[1:n_train] 
+#test set is n_train+1 - the rest of samples
+test_rows <- shuffled_rows[(n_train + 1):total_samples] 
+# contains the training attributes
+obesity_train <- obesity_normalise[train_rows, ] 
+#contains the test attributes
+obesity_test <- obesity_normalise[test_rows, ] 
+# contains the corresponding training labels
+obesity_train_labels <- obesity[train_rows, "obesity_level"] 
+# contains the corresponding test labels
+obesity_test_labels <- obesity[test_rows, "obesity_level"] 
+```
+
+Next, check the r-code has run successfully and the seven levels are proportioned adequately for the K-NN model to learn from and test predictions with.
+```{r echo = TRUE, eval=FALSE}
+# Check training and test labels are correctly proportioned
+table(obesity_train_labels)
+table (obesity_test_labels)
+```
+
+
+# Train K-NN Model
+## Attempt 1
+### Normalisation: k=42 
+There are 1689 observations in the training set. Euclidean distance does not work with nominal values so for the first attempt, the rounded square root of the training set count will be set as *k*. It's important to note, however, that large *k* values can lead to an underfit model, which can result in low specificity and high bias 
+```{r}
+test_predictions <- knn(train = obesity_train, test = obesity_test,
+                      cl = obesity_train_labels, k = 42)
+```
+
+A contingency table is then generated, using the *gmodels* package, comparing actual labels (obesity_test_labels) with predicted labels (test_predictions). The contingency table is printed, showing the counts of correct and incorrect predictions, along with row and column totals.
+
+```{r eval=TRUE, echo=TRUE, results='hide'}
+# Creating a contingency table with row and column totals
+Crosstable_normalise <- CrossTable(x = obesity_test_labels, 
+                                   y = test_predictions, prop.chisq = FALSE)
+# Print the table
+print(Crosstable_normalise, digits = 2) # 61.6% accuracy rate
+```
+With a k value of 42, the reported accuracy rate is 61.6%, indicating the proportion of correctly classified instances. This can be improved upon.
+
+
+# Improve Model Performance
+## Attempt 2
+### Normalisation: k= 5
+
+Here, different *k* values are attempted. Its important to note that lower *k* values can lead to an overfit model which can result in low specificity and low bias
+```{r eval=TRUE, echo=TRUE, results='hide'}
+test_predictions <- knn(train = obesity_train, 
+                        test = obesity_test,
+                        cl = obesity_train_labels, 
+                        k = 5)
+Crosstable_normalise <- CrossTable(x = obesity_test_labels, 
+                                   y = test_predictions, 
+                                   prop.chisq = FALSE)
+print(Crosstable_normalise, digits = 2) # 73% accuracy rate
+```
+
+## Attempt 3
+### Normalisation: k= 3, 
+We see here reducing the *k* value of a normalised dataset improves our accuracy rate to at most 77.3%.
+Another method to try enhance this accuracy rate is Z-Score Standardisation.
+```{r eval=TRUE, echo=TRUE, results='hide'}
+test_predictions <- knn(train = obesity_train, test = obesity_test,
+                        cl = obesity_train_labels, k = 3)
+Crosstable_normalise <- CrossTable(x = obesity_test_labels, y = test_predictions, prop.chisq = FALSE)
+print(Crosstable_normalise, digits = 2) # 77.3% accuracy rate
+```
+
+# Improving K-NN Model With Z-Score Standardisation
+Earlier, normalisation was performed as a processing technique for K-NN, whilst in this instance standardisation is occurring. Both techniques are have similiar features but vary slightly.
+
+Normalisation rescales the values of each feature to fall within a specific range, often between 0 and 1. On the other hand, standardisation transforms the values of each feature to have a mean of zero and a standard deviation of one, achieved by subtracting the mean and dividing by the standard deviation. 
+
+Whilst normalisation ensures that features are on a consistent scale, standardisation makes features comparable by removing the effect of scale differences.
+```{r}
+columns_scale <- c("Age", "Weight", "main_meals_count", 
+                   "Height", "veg_meals", "CH2O", 
+                   "FAF", "TUE")
+obesity_zscore <- obesity
+# standardise columns
+obesity_zscore[columns_scale] <- scale(obesity_zscore[columns_scale]) 
+# Check code has run successfully 
+summary(obesity_zscore$Height) # Check mean of the standardised variable is zero
+```
+
+Data is again split randomly 80:20 into a training and test set. 
+```{r echo=TRUE}
+# Split data randomly into training (80%) and testing (20%) sets
+set.seed(123)
+# returns number of rows in obesity
+total_samples <- nrow(obesity_normalise) 
+# selects a random sample
+shuffled_rows <- sample(total_samples) 
+# 80% for training, 20% for testing
+train_prop <- 0.8  
+# retrieves approximately 80% of total samples
+n_train <- round(train_prop * total_samples) 
+# training set is set from 1-n_train
+train_rows <- shuffled_rows[1:n_train] 
+#test set is n_train+1 - the rest of samples
+test_rows <- shuffled_rows[(n_train + 1):total_samples] 
+# contains the training attributes
+obesity_train <- obesity_normalise[train_rows, ] 
+#contains the test attributes
+obesity_test <- obesity_normalise[test_rows, ] 
+# contains the corresponding training labels
+obesity_train_labels <- obesity[train_rows, "obesity_level"] 
+# contains the corresponding test labels
+obesity_test_labels <- obesity[test_rows, "obesity_level"] 
+```
+
+Data processing and checks are completed to ensure even distributions
+
+```{r echo = TRUE, eval= FALSE}
+# check distributions and labels are adequately proportioned
+table(obesity_test_labels)
+table(obesity_train_labels)
+```
+
+# Re-run K-NN Classification
+## Attempt 1
+### Z-Score Standardisation: k=42
+```{r eval=TRUE, echo=TRUE, results='hide'}
+test_predictions_zscore <- knn(train = obesity_train, 
+                               test = obesity_test,
+                               cl = obesity_train_labels, 
+                               k = 42)
+Crosstable_zscore<-CrossTable(x = obesity_test_labels, 
+                              y = test_predictions_zscore,
+                              prop.chisq = FALSE)
+print(Crosstable_zscore, digits=2) # 62.08 accuracy rate
+```
+
+## Attempt 2
+### Z-Score Standardisation: k=5
+```{r eval=TRUE, echo=TRUE, results='hide'}
+test_predictions_zscore <- knn(train = obesity_train, test = obesity_test,
+                               cl = obesity_train_labels, k = 5)
+Crosstable_zscore<-CrossTable(x = obesity_test_labels, y = test_predictions_zscore,
+                         prop.chisq = FALSE)
+print(Crosstable_zscore, digits=2) # 73.5%
+```
+## Attempt 3
+### Z-Score Standardisation: k=3
+
+```{r eval=TRUE, echo=TRUE, results='hide'}
+test_predictions_zscore <- knn(train = obesity_train, 
+                               test = obesity_test,
+                               cl = obesity_train_labels, 
+                               k = 3)
+Crosstable_zscore<-CrossTable(x = obesity_test_labels, 
+                              y = test_predictions_zscore,
+                              prop.chisq = FALSE)
+print(Crosstable_zscore, digits=2) # 75.5% accuracy rate
+```
+The normalised (*k* = 3) K-NN machine learning model achieved the highest accuracy rate reaching **77.3%**. Although the Z-Score standardisation performed efficiently also achieving **75.5%**
+# Data Visualisation
+
+Lastly, a scatterplot is created to clearly show predictions made using the K-NN model and actual results from the data. Each point represents a pair of actual and predicted labels. 
+
+If the model makes perfect predictions, all points would fall along a dashed red line. However, deviations from this line indicate where the model's predictions differ from the actual labels. 
+
+```{r}
+# Create a dataframe containing actual and predicted labels
+obesity_results <- data.frame(Actual = obesity_test_labels, Predicted = test_predictions)
+
+# Plot actual vs. predicted labels
+ggplot(obesity_results, aes(x = Actual, y = Predicted)) + #label x and y axis
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, # insert red, dashed line
+              colour = "red", linetype = "dashed") +  
+  labs(x = "Actual Labels", y = "Predicted Labels", # x and y axis titles
+       title = "Actual vs. Predicted Labels") + # title of graph
+  theme(axis.text.x = element_text(angle = 15))  # Rotate x-axis labels by 45 degrees
+
+```
+
+## Conclusion 
+
+This analysis investigated the application of the K-Nearest Neighbors (K-NN) algorithm to predict obesity levels in a given dataset.  One initial challenge involved handling variables with different measurement scales. Lantz's book proved to be a valuable resource in addressing this issue ([@lantz13]).
+
+The exploration involved multiple iterations and refinements to optimise model performance. This included adjusting parameters like the "k" value (number of neighbors considered) and applying different pre-processing techniques.
+
+Data preparation began with encoding categorical variables and normalising the data to ensure consistency across features. The dataset was then split into training and testing sets for model evaluation.
+
+Through various trials with different k values and pre-processing methods, the K-NN models exhibited varying levels of accuracy. The best performing model achieved a 77.3% accuracy rate with k=3 using data normalisation. Z-score standardisation also yielded a respectable accuracy of 75.5%.
+
+While the graphical results suggest some learning by the model, with clusters forming along the "correct" prediction line, there are also some outliers.  For instance, the model might predict "Normal Weight" as "Overweight Level II".
+
+Introducing a larger and more diverse dataset with a wider distribution of weight levels could potentially improve the model's accuracy and effectiveness. This would provide the model with a broader range of examples to learn from and potentially enhance its ability to make more accurate predictions.
+
+## References
+
+@RMarkdown_Cheat_Sheet
+@lantz13
+@knndetails
+@sharma19
+@how-knn-uses-distance-measures
+@Intro-to-ML
+@Knnexamples

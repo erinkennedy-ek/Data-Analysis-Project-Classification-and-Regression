@@ -1,0 +1,263 @@
+---
+title: "Regression_Erin_Kennedy"
+author: "A00275664"
+date: "2024-04-01"
+output: html_document
+bibliography: Regression_References.json
+---
+
+# Regression Analysis on Bike Rental Demand
+
+### Import the hour dataset and install relevant packages using the **read.csv()** command
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+bike<-read.csv("~/A00275664/Data/hour.csv", header = T, 
+               sep = ",", stringsAsFactors = TRUE)
+library (tidyverse)
+library(caret)
+library(DescTools)
+library(olsrr)
+library(devtools)
+library(citr)
+library(rbbt)
+```
+
+
+```{r echo = FALSE, include=FALSE}
+install.packages("tidyverse")
+install.packages("caret")
+install.packages("DescTools")
+install.packages("olsrr")
+install.packages("devtools")
+devtools::install_github("crsh/citr")
+remotes::install_github("paleolimbot/rbbt")
+```
+
+# Preparation
+## Initial Analysis
+
+There are no null values in the dataset ensuring cleanliness and comprehensibility.
+
+```{r echo=TRUE, results='hide'}
+# Check for missing values
+null_values <- colSums(is.na(bike))
+print(null_values)
+View(bike)
+```
+
+The data types of each variable are appropriate for their respective feature, which enhances the accuracy and reliability of the analysis.
+```{r echo=TRUE}
+str(bike)
+```
+This command provides detailed descriptive statistics for the dataset (*bike*). It provides statistics for each feature such as mean and median. The distribution of the dataset can be revealed from **summary()**. 
+
+It can also help when selecting a suitable target and predictor variable and identifying relationships between features within the dataset.
+
+
+```{r include =TRUE, eval =FALSE}
+summary(bike) 
+summary(bike$cnt) # independent variable
+```
+
+The independent variable's mean is greater than the median which shows that the data is right-skewed
+
+```{r}
+hist(bike$cnt)
+```
+
+# Linear Regression Analysis
+## Predicting Total Bike Rental Count Based on Dataset Features
+
+The coefficients indicate the estimated average increase or decrease in the count of bikes per hour. The coefficients assume that each predictor variable equals zero and the coefficient value is the predicted value count.
+
+For example the normalised feeling temperature has a high impact on the amount of bikes rented and with each increase point in temperature, an increase of .313 in the average of bike counts that are rented.
+
+The adjusted r-squared is 31.23 or 31.23%. This figure represents the amount of variance the model accounts for. This is quite low. The residual error is 15.41%. With such a high variability of data, this error can be considered good.
+```{r}
+
+# First regression model
+bikemod=lm(formula = cnt ~ season + mnth + weekday + holiday + atemp 
+           + hum +windspeed + yr + workingday + weathersit +temp,
+           data=bike) 
+bikemod
+summary(bikemod)
+```
+
+Next attempt, I will remove some less significant variables, in accordance with the legend provided:
+
+
+"Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1"
+
+
+I removed the variables *temp*, *workingday*, and *mnth*, due to the reason they did not have a large impact on the r-squared value. The variance accounted for now is 31.22%, slightly less than before. The residual error remained the same 15.41%. Following Occams's Razor of simplicity, model two will be utilised.
+
+```{r}
+# Second bikemod with removed variables
+bikemod=lm(formula = cnt ~ season + weekday + holiday + atemp 
+           + hum +windspeed + yr + weathersit,
+           data=bike) 
+summary(bikemod)
+
+```
+
+In the third attempt, outliers were removed. 
+
+To identify outliers, a outlier and leverage plot was performed. Outliers were removed into a seperate dataset and a new model was created for comparison
+```{r}
+# Fit the linear regression model
+bikemod <- lm(cnt ~ season + weekday + holiday + atemp 
+          + hum + windspeed + yr + weathersit, data = bike)
+
+# Plot residual vs. leverage
+ols_plot_resid_lev(bikemod)
+
+# Identify influential observations based on the diagnostic plots
+outliers <- which(abs(cooks.distance(bikemod)) > 4 / length(fitted(bikemod)))
+
+# Remove outliers from the dataset
+bike_clean <- bike[-outliers, ]
+```
+
+The adjusted r-squared figure increased to 34.48% and the residual error rate reduced to 12.75, marginally better than the previous attempts. The significance of each relationship also improved, represented by '***'. The range of values also reduced, showing the data values are now closer together and have more in common.
+```{r}
+# Refit the model with the cleaned dataset
+bikemod_clean <- lm(cnt ~ season + weekday + holiday + atemp + hum + windspeed + yr + weathersit, data = bike_clean)
+summary(bikemod_clean)
+```
+
+```{r}
+layout(matrix(1:4,2,2)) # plotting all four graphs at once
+plot(bikemod_clean)
+```
+
+### Graph 1. 
+
+In the residual vs. fitted plot, while most residuals align closely around 0, indicating a good fit, a downward slope in the lower half of the data points suggests potential issues with the model's predictive accuracy, especially for higher values of the response variable.One possible way to improve upon this would be a stricter removal of outliers.
+
+### Graph 2. 
+
+In the scale-location plot, we observe points scattered evenly along the dashed line, which represents the mean or zero value. This pattern suggests that the residuals do not exhibit any discernible trend relative to the fitted values. Consequently, it implies that the assumption of homoscedasticity (constant variance) is likely satisfied, in the model's errors across the range of predicted values. Thus, the regression model's predictions are presumed to be equally reliable across different levels of predictor variables, bolstering the validity and reliability of the regression analysis.
+
+### Graph 3. 
+
+The Q-Q plot reveals a predominantly straight line, indicating that the residuals adhere closely to a distribution that is approximately normal across most of the data range. However, a slight rise towards the end of the plot suggests deviations from normality, particularly at the upper end of the residual distribution. 
+
+While the normality assumption is reasonably met for the majority of the data, the presence of deviations at the upper end indicates potential outliers or influential observations that may impact the validity of the regression analysis.
+
+### Graph 4.
+
+The residuals vs. leverage plot displays a triangular cluster of points at the beginning, indicating observations with low leverage and small residuals, thus having minimal impact on the regression. At the very end, there's a large cluster, suggesting observations with high leverage and potentially larger residuals, significantly influencing the regression model. However, there's an empty space in the middle, indicating a lack of observations with moderate leverage and residuals. Overall, this pattern suggests potential outliers and influential observations at both ends of the spectrum.
+
+# Splitting the Data
+
+## Divide the data into training and test sets.
+The clean bike dataset is divided into two subsets: a training set and a test set to train the regression model and evaluate the model's performance.The data has to be split so the model can learn from unseen data and ensure it is evaluated with an unbiased accuracy rate.
+```{r eval=TRUE, include=TRUE}
+set.seed(123)
+training.samples <- bike_clean$cnt %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- bike_clean[training.samples, ]
+test.data <- bike_clean[-training.samples, ]
+dim(train.data)
+dim(test.data)
+```
+
+## Creating the Regression Model
+
+The model is created and trained using the training set. 
+```{r results='hide'}
+bikemodel <- lm(cnt ~ season + weekday + holiday + atemp 
+          + hum + windspeed + yr + weathersit, 
+                train.data)
+summary(bikemodel)
+# Plot Residuals
+layout(matrix(1:4,2,2))
+plot(bikemodel)
+```
+
+## Coefficient of Determination
+
+The proportion of variance is measured using *summary()$rsquared*. A higher r-squared is desiriable in regression models, as more of the unknown is explained by the model's predictor variables themselves proving a strong relationship between the predictor variables and the independent variable.
+```{r}
+# rsquared shows how much variance is explained by the model
+summary(bikemodel)$r.squared 
+summary(bikemodel)
+```
+
+
+The p-value is less than .05; therefore, we reject the null hypothesis indicating there is no relationship between the variables. There is a significant relationship between the variables in the model.
+
+# Making Predictions 
+
+Here, the trained regression model is employed to predict the independent variable *cnt* using the test data created previously.
+```{r}
+predictions <- predict(bikemodel, test.data)
+head(predictions)
+```
+
+
+## Prediction Performance
+
+The Mean Absolute Error(MAE), Root Mean Squared Error(RMSE) and Mean Absolute Percentage Error(MAPE) are used to evaluate the accuracy of the model in it's predictions.
+
+```{r}
+MAE(predictions, test.data$cnt)
+RMSE(predictions, test.data$cnt)
+MAPE(predictions, test.data$cnt) # Lower values are desirable, indicating better accuracy
+```
+
+## Data Visualisation
+### Confidence Interval and Prediction Interval Displays
+
+A confidence interval specifies the range of values within which a certain level of confidence expects the true outcome to lie. The prediction interval provides an understanding of the uncertainty associated with individual future observations. Here, a confidence interval plot and prediction interval plot is generated visualising the model's predictions.
+```{r}
+confidence_predictions <- predict(bikemodel, test.data, interval="confidence")
+head(confidence_predictions)
+plot(season~cnt, data=test.data)
+lines(test.data$cnt,confidence_predictions[,1],col="red") # lower bound
+lines(test.data$cnt,confidence_predictions[,2],col="blue") # predictions
+lines(test.data$cnt,confidence_predictions[,3],col="green") # upper
+
+```
+
+### Generate Plots Showing the Prediction Interval
+```{r}
+predict_predictions <- predict(bikemodel, test.data, interval="predict")
+head(predict_predictions)
+plot(season~cnt, data=test.data)
+lines(test.data$cnt,predict_predictions[,1],col="red")
+lines(test.data$cnt,predict_predictions[,2],col="blue")
+lines(test.data$cnt,predict_predictions[,3],col="green")
+```
+
+
+## Custom Predictions with the Model
+
+This section illustrates how the trained regression model can be utilised to predict outcomes for new, customised scenarios involving unseen data. Once a model has a greater r-squared figure and more precise accuracy rate, It can assist in decision-making problems in real-life capacities.
+```{r}
+bikedf<- data.frame(season = 1, weekday = 0, holiday = 0, atemp = 20, hum = 13, windspeed = 30, yr = 2011, weathersit = 1) 
+predict_predictions<-predict(bikemodel, bikedf, interval="predict")
+predict_predictions
+```
+When it is a windy dry Spring day, with clear skies, the model predicts the amount of bike rentals will be approximately 107 bikes, ranging from 99 to 116 bikes per hour.
+
+## Conclusion
+
+This project delved into analysing bike rental data using multiple linear regression with RMarkdown. While I had some initial hurdles revisiting RMarkdown after a break, refreshing myself with official RStudio resources and user guides proved valuable. However, incorporating references using RMarkdown presented a new challenge. The limited online resources on this topic (especially visual or descriptive ones) this area a bit stressful.  Thankfully, I was able to leverage the academic referencing tool Zotero to complete the citations.
+
+Overall, the analysis yielded valuable insights into the factors affecting bike rental counts.  It began with a thorough exploration of the data to ensure its quality and understandability.  Through iterative model fitting and refinement, key predictors emerged – seasonality, weather, day of the week, and year – all of which significantly influence bike rental demand.
+
+The regression models displayed varying degrees of predictive accuracy and explanatory power. Initial models showed moderate adjusted R-squared values. However, subsequent iterations incorporating feature selection and outlier removal improved model performance. While these enhancements are positive, there's still room for further refinement and exploration to achieve even better predictive accuracy and robustness.
+
+Evaluation metrics like Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), and Mean Absolute Percentage Error (MAPE) provided crucial insights  into model performance. Diagnostic plots displaying confidence and prediction intervals offered additional insights into model behaviour and performance. They helped identify potential issues like heteroscedasticity and outliers, guiding further model refinement.
+
+This analysis offers valuable takeaways for bike rental businesses, enabling them to enhance operations, predict demand fluctuations, and improve customer satisfaction. By leveraging regression analysis to anticipate trends and continually refine the models, stakeholders can make informed decisions to effectively meet the evolving needs of bike rental users.
+
+## References
+
+@Regression
+@RMarkdown_Cheat_Sheet
+@Linear19
+@InterpretingPlots24
+@Coefficients17
+@lantz13
